@@ -12,8 +12,10 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
 #include <unistd.h>
 #include <sys/types.h>
+#include <sys/select.h>
 #include <X11/extensions/Xrandr.h>
 #include <X11/extensions/Xinerama.h>
 #include <X11/extensions/Xrender.h>
@@ -198,6 +200,20 @@ writemessage(Display *dpy, Window win, int screen, struct lock *lock, int passle
 		                  (FcChar8 *)asterisks, ast_len);
 	}
 
+	/* Draw date and time at the bottom */
+	time_t t = time(NULL);
+	struct tm *tm_info = localtime(&t);
+	char datetime_buf[128];
+	strftime(datetime_buf, sizeof(datetime_buf), "%A, %B %d, %Y  %I:%M:%S %p", tm_info);
+
+	int datetime_len = strlen(datetime_buf);
+	XftTextExtentsUtf8(dpy, font, (FcChar8 *)datetime_buf, datetime_len, &extents);
+	width = (s_width - extents.width) / 2;
+	int datetime_y = s_height - 50;
+
+	XftDrawStringUtf8(draw, &color, font, width, datetime_y,
+	                  (FcChar8 *)datetime_buf, datetime_len);
+
 	XftColorFree(dpy, lock->visual, lock->colormap, &color);
 	XftDrawDestroy(draw);
 	XftFontClose(dpy, font);
@@ -261,6 +277,9 @@ readpw(Display *dpy, struct xrandr *rr, struct lock **locks, int nscreens,
 	unsigned int len, color, indicators;
 	KeySym ksym;
 	XEvent ev;
+	struct timeval tv;
+	fd_set fds;
+	int x11_fd;
 
 	len = 0;
 	caps = 0;
@@ -271,7 +290,28 @@ readpw(Display *dpy, struct xrandr *rr, struct lock **locks, int nscreens,
 	if (!XkbGetIndicatorState(dpy, XkbUseCoreKbd, &indicators))
 		caps = indicators & 1;
 
-	while (running && !XNextEvent(dpy, &ev)) {
+	x11_fd = ConnectionNumber(dpy);
+
+	while (running) {
+		/* Set up for select() with 1 second timeout */
+		FD_ZERO(&fds);
+		FD_SET(x11_fd, &fds);
+		tv.tv_sec = 1;
+		tv.tv_usec = 0;
+
+		/* Wait for X event or timeout */
+		if (select(x11_fd + 1, &fds, NULL, NULL, &tv) > 0) {
+			/* X event available */
+			XNextEvent(dpy, &ev);
+		} else {
+			/* Timeout - redraw to update time */
+			for (screen = 0; screen < nscreens; screen++) {
+				XClearWindow(dpy, locks[screen]->win);
+				writemessage(dpy, locks[screen]->win, screen, locks[screen], len);
+			}
+			continue;
+		}
+
 		if (ev.type == KeyPress) {
 			explicit_bzero(&buf, sizeof(buf));
 			num = XLookupString(&ev.xkey, buf, sizeof(buf), &ksym, 0);
