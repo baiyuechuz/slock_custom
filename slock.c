@@ -141,93 +141,92 @@ writemessage(Display *dpy, Window win, int screen, struct lock *lock, int passle
 			k++;
 	}
 
+	int num_screens = 0;
 	if (XineramaIsActive(dpy)) {
-		xsi = XineramaQueryScreens(dpy, &i);
-		/* Find the screen with largest area (main screen) */
-		int main_screen = 0;
-		int max_area = 0;
-		int j;
-		for (j = 0; j < i; j++) {
-			int area = xsi[j].width * xsi[j].height;
-			if (area > max_area) {
-				max_area = area;
-				main_screen = j;
+		xsi = XineramaQueryScreens(dpy, &num_screens);
+	} else {
+		num_screens = 1;
+	}
+
+	/* Draw on each screen */
+	for (int scr = 0; scr < num_screens; scr++) {
+		if (XineramaIsActive(dpy)) {
+			s_width = xsi[scr].width;
+			s_height = xsi[scr].height;
+			s_x = xsi[scr].x_org;
+			s_y = xsi[scr].y_org;
+		} else {
+			s_width = DisplayWidth(dpy, screen);
+			s_height = DisplayHeight(dpy, screen);
+			s_x = 0;
+			s_y = 0;
+		}
+
+		height = s_height/2 - (k*20)/2;
+
+		/* Draw each line centered */
+		line_start = 0;
+		k = 0;
+		total_height = height;
+		for (i = 0; i <= len; i++) {
+			if (i == len || message[i] == '\n') {
+				/* Extract this line into buffer */
+				line_len = i - line_start;
+				if (line_len >= (int)sizeof(line_buf))
+					line_len = sizeof(line_buf) - 1;
+
+				for (j = 0; j < line_len; j++)
+					line_buf[j] = message[line_start + j];
+				line_buf[line_len] = '\0';
+
+				/* Use larger font for first line (k==0) */
+				XftFont *current_font = (k == 0) ? font_large : font;
+
+				/* Calculate width of this line */
+				XftTextExtentsUtf8(dpy, current_font, (FcChar8 *)line_buf, line_len, &extents);
+
+				/* Center this line */
+				width = s_x + (s_width - extents.width) / 2;
+
+				/* Draw this line */
+				XftDrawStringUtf8(draw, &color, current_font, width, s_y + total_height,
+				                  (FcChar8 *)line_buf, line_len);
+
+				total_height += current_font->ascent + current_font->descent;
+				line_start = i + 1;
+				k++;
 			}
 		}
-		s_width = xsi[main_screen].width;
-		s_height = xsi[main_screen].height;
-		s_x = xsi[main_screen].x_org;
-		s_y = xsi[main_screen].y_org;
-	} else {
-		s_width = DisplayWidth(dpy, screen);
-		s_height = DisplayHeight(dpy, screen);
-		s_x = 0;
-		s_y = 0;
-	}
-	height = s_height/2 - (k*20)/2;
 
-	/* Draw each line centered */
-	line_start = 0;
-	k = 0;
-	total_height = height;
-	for (i = 0; i <= len; i++) {
-		if (i == len || message[i] == '\n') {
-			/* Extract this line into buffer */
-			line_len = i - line_start;
-			if (line_len >= (int)sizeof(line_buf))
-				line_len = sizeof(line_buf) - 1;
+		/* Draw password asterisks */
+		if (passlen > 0) {
+			char asterisks[256];
+			int ast_len = passlen < 255 ? passlen : 255;
+			for (i = 0; i < ast_len; i++)
+				asterisks[i] = '*';
+			asterisks[ast_len] = '\0';
 
-			for (j = 0; j < line_len; j++)
-				line_buf[j] = message[line_start + j];
-			line_buf[line_len] = '\0';
-
-			/* Use larger font for first line (k==0) */
-			XftFont *current_font = (k == 0) ? font_large : font;
-
-			/* Calculate width of this line */
-			XftTextExtentsUtf8(dpy, current_font, (FcChar8 *)line_buf, line_len, &extents);
-
-			/* Center this line */
+			XftTextExtentsUtf8(dpy, font, (FcChar8 *)asterisks, ast_len, &extents);
 			width = s_x + (s_width - extents.width) / 2;
 
-			/* Draw this line */
-			XftDrawStringUtf8(draw, &color, current_font, width, s_y + total_height,
-			                  (FcChar8 *)line_buf, line_len);
-
-			total_height += current_font->ascent + current_font->descent;
-			line_start = i + 1;
-			k++;
+			XftDrawStringUtf8(draw, &color, font, width, s_y + total_height + 10,
+			                  (FcChar8 *)asterisks, ast_len);
 		}
-	}
 
-	/* Draw password asterisks */
-	if (passlen > 0) {
-		char asterisks[256];
-		int ast_len = passlen < 255 ? passlen : 255;
-		for (i = 0; i < ast_len; i++)
-			asterisks[i] = '*';
-		asterisks[ast_len] = '\0';
+		/* Draw date and time at the bottom */
+		time_t t = time(NULL);
+		struct tm *tm_info = localtime(&t);
+		char datetime_buf[128];
+		strftime(datetime_buf, sizeof(datetime_buf), "%A, %B %d, %Y  %I:%M:%S %p", tm_info);
 
-		XftTextExtentsUtf8(dpy, font, (FcChar8 *)asterisks, ast_len, &extents);
+		int datetime_len = strlen(datetime_buf);
+		XftTextExtentsUtf8(dpy, font, (FcChar8 *)datetime_buf, datetime_len, &extents);
 		width = s_x + (s_width - extents.width) / 2;
+		int datetime_y = s_y + s_height - 50;
 
-		XftDrawStringUtf8(draw, &color, font, width, s_y + total_height + 10,
-		                  (FcChar8 *)asterisks, ast_len);
+		XftDrawStringUtf8(draw, &color, font, width, datetime_y,
+		                  (FcChar8 *)datetime_buf, datetime_len);
 	}
-
-	/* Draw date and time at the bottom */
-	time_t t = time(NULL);
-	struct tm *tm_info = localtime(&t);
-	char datetime_buf[128];
-	strftime(datetime_buf, sizeof(datetime_buf), "%A, %B %d, %Y  %I:%M:%S %p", tm_info);
-
-	int datetime_len = strlen(datetime_buf);
-	XftTextExtentsUtf8(dpy, font, (FcChar8 *)datetime_buf, datetime_len, &extents);
-	width = s_x + (s_width - extents.width) / 2;
-	int datetime_y = s_y + s_height - 50;
-
-	XftDrawStringUtf8(draw, &color, font, width, datetime_y,
-	                  (FcChar8 *)datetime_buf, datetime_len);
 
 	XftColorFree(dpy, lock->visual, lock->colormap, &color);
 	XftDrawDestroy(draw);
