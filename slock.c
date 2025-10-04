@@ -99,7 +99,7 @@ dontkillme(void)
 static void
 writemessage(Display *dpy, Window win, int screen, struct lock *lock, int passlen)
 {
-	int len, width, height, s_width, s_height, i, j, k;
+	int len, width, height, s_width, s_height, s_x, s_y, i, j, k;
 	int line_start, total_height;
 	XineramaScreenInfo *xsi;
 	XftDraw *draw;
@@ -143,11 +143,26 @@ writemessage(Display *dpy, Window win, int screen, struct lock *lock, int passle
 
 	if (XineramaIsActive(dpy)) {
 		xsi = XineramaQueryScreens(dpy, &i);
-		s_width = xsi[0].width;
-		s_height = xsi[0].height;
+		/* Find the screen with largest area (main screen) */
+		int main_screen = 0;
+		int max_area = 0;
+		int j;
+		for (j = 0; j < i; j++) {
+			int area = xsi[j].width * xsi[j].height;
+			if (area > max_area) {
+				max_area = area;
+				main_screen = j;
+			}
+		}
+		s_width = xsi[main_screen].width;
+		s_height = xsi[main_screen].height;
+		s_x = xsi[main_screen].x_org;
+		s_y = xsi[main_screen].y_org;
 	} else {
 		s_width = DisplayWidth(dpy, screen);
 		s_height = DisplayHeight(dpy, screen);
+		s_x = 0;
+		s_y = 0;
 	}
 	height = s_height/2 - (k*20)/2;
 
@@ -173,10 +188,10 @@ writemessage(Display *dpy, Window win, int screen, struct lock *lock, int passle
 			XftTextExtentsUtf8(dpy, current_font, (FcChar8 *)line_buf, line_len, &extents);
 
 			/* Center this line */
-			width = (s_width - extents.width) / 2;
+			width = s_x + (s_width - extents.width) / 2;
 
 			/* Draw this line */
-			XftDrawStringUtf8(draw, &color, current_font, width, total_height,
+			XftDrawStringUtf8(draw, &color, current_font, width, s_y + total_height,
 			                  (FcChar8 *)line_buf, line_len);
 
 			total_height += current_font->ascent + current_font->descent;
@@ -194,9 +209,9 @@ writemessage(Display *dpy, Window win, int screen, struct lock *lock, int passle
 		asterisks[ast_len] = '\0';
 
 		XftTextExtentsUtf8(dpy, font, (FcChar8 *)asterisks, ast_len, &extents);
-		width = (s_width - extents.width) / 2;
+		width = s_x + (s_width - extents.width) / 2;
 
-		XftDrawStringUtf8(draw, &color, font, width, total_height + 10,
+		XftDrawStringUtf8(draw, &color, font, width, s_y + total_height + 10,
 		                  (FcChar8 *)asterisks, ast_len);
 	}
 
@@ -208,8 +223,8 @@ writemessage(Display *dpy, Window win, int screen, struct lock *lock, int passle
 
 	int datetime_len = strlen(datetime_buf);
 	XftTextExtentsUtf8(dpy, font, (FcChar8 *)datetime_buf, datetime_len, &extents);
-	width = (s_width - extents.width) / 2;
-	int datetime_y = s_height - 50;
+	width = s_x + (s_width - extents.width) / 2;
+	int datetime_y = s_y + s_height - 50;
 
 	XftDrawStringUtf8(draw, &color, font, width, datetime_y,
 	                  (FcChar8 *)datetime_buf, datetime_len);
