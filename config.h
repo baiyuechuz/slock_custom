@@ -3,14 +3,11 @@ static const char *user  = "nobody";
 static const char *group = "nobody";
 
 static const char *colorname[NUMCOLS] = {
-	[INIT]		=	"#cc0b1221", /* after initialization */
-	[INPUT]		=	"#cc004466", /* during input */
-	[FAILED]	=	"#cc660000", /* wrong password */
-	[CAPS]		=	"#ccCC6600", /* CapsLock on */
+	[INIT]		=	"#ff111827", /* after initialization */
+	[INPUT]		=	"#ff1f2937", /* during input */
+	[FAILED]	=	"#ff991b1b", /* wrong password */
+	[CAPS]		=	"#fff59e0b", /* CapsLock on */
 };
-
-/* alpha value for background (00 = fully transparent, ff = fully opaque) */
-static const unsigned int alpha = 0xcc;
 
 /* treat a cleared input like a wrong password (color) */
 static const int failonclear = 1;
