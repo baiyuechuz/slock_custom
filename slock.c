@@ -98,22 +98,25 @@ static void
 writemessage(Display *dpy, Window win, int screen, struct lock *lock, int passlen)
 {
 	int len, width, height, s_width, s_height, i, j, k;
-	int line_start;
+	int line_start, total_height;
 	XineramaScreenInfo *xsi;
 	XftDraw *draw;
 	XftColor color;
-	XftFont *font;
+	XftFont *font, *font_large;
 	XGlyphInfo extents;
 	char line_buf[256];
 	int line_len;
 
 	font = XftFontOpenName(dpy, screen, font_name);
-	if (font == NULL) {
+	font_large = XftFontOpenName(dpy, screen, font_name_large);
+	if (font == NULL || font_large == NULL) {
 		if (count_error == 0) {
-			fprintf(stderr, "slock: Unable to load font \"%s\"\n", font_name);
+			fprintf(stderr, "slock: Unable to load font\n");
 			fprintf(stderr, "slock: Try listing fonts with 'fc-list'\n");
 			count_error++;
 		}
+		if (font) XftFontClose(dpy, font);
+		if (font_large) XftFontClose(dpy, font_large);
 		return;
 	}
 
@@ -149,6 +152,7 @@ writemessage(Display *dpy, Window win, int screen, struct lock *lock, int passle
 	/* Draw each line centered */
 	line_start = 0;
 	k = 0;
+	total_height = height;
 	for (i = 0; i <= len; i++) {
 		if (i == len || message[i] == '\n') {
 			/* Extract this line into buffer */
@@ -160,16 +164,20 @@ writemessage(Display *dpy, Window win, int screen, struct lock *lock, int passle
 				line_buf[j] = message[line_start + j];
 			line_buf[line_len] = '\0';
 
+			/* Use larger font for first line (k==0) */
+			XftFont *current_font = (k == 0) ? font_large : font;
+
 			/* Calculate width of this line */
-			XftTextExtentsUtf8(dpy, font, (FcChar8 *)line_buf, line_len, &extents);
+			XftTextExtentsUtf8(dpy, current_font, (FcChar8 *)line_buf, line_len, &extents);
 
 			/* Center this line */
 			width = (s_width - extents.width) / 2;
 
 			/* Draw this line */
-			XftDrawStringUtf8(draw, &color, font, width, height + (font->ascent + font->descent) * k,
+			XftDrawStringUtf8(draw, &color, current_font, width, total_height,
 			                  (FcChar8 *)line_buf, line_len);
 
+			total_height += current_font->ascent + current_font->descent;
 			line_start = i + 1;
 			k++;
 		}
@@ -186,13 +194,14 @@ writemessage(Display *dpy, Window win, int screen, struct lock *lock, int passle
 		XftTextExtentsUtf8(dpy, font, (FcChar8 *)asterisks, ast_len, &extents);
 		width = (s_width - extents.width) / 2;
 
-		XftDrawStringUtf8(draw, &color, font, width, height + (font->ascent + font->descent) * (k + 1),
+		XftDrawStringUtf8(draw, &color, font, width, total_height + 10,
 		                  (FcChar8 *)asterisks, ast_len);
 	}
 
 	XftColorFree(dpy, lock->visual, lock->colormap, &color);
 	XftDrawDestroy(draw);
 	XftFontClose(dpy, font);
+	XftFontClose(dpy, font_large);
 
 	/* xsi should not be NULL anyway if Xinerama is active, but to be safe */
 	if (XineramaIsActive(dpy) && xsi != NULL)

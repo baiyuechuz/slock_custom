@@ -16,10 +16,13 @@ static const unsigned int alpha = 0xcc;
 static const int failonclear = 1;
 
 /* default message */
-static const char * message = "BAIYUECHU - ARTIX\n\nEnter password to unlock the screen";
+static const char * message = "BAIYUECHU\n baiyuechuz - 󰖟 baiyuechu.dev\n\nEnter password to unlock the screen";
 
 /* text color */
 static const char * text_color = "#E5E6E5";
 
 /* text size (must be a valid size) */
 static const char * font_name = "JetBrainsMono Nerd Font:size=18:antialias=true:hinting=true:rgba=true";
+
+/* larger font for first line */
+static const char * font_name_large = "JetBrainsMono Nerd Font:size=32:antialias=true:hinting=true:rgba=true";
